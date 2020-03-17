@@ -1,4 +1,16 @@
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+def split_list(l, n):
+    '''
+    l= list to splot 
+    n=number of chunks to generate
+    '''
+    k=int(len(l)/n)
+    res=[l[i:i+k] for i in range(0,len(l)-1, k) ]
+    res[-1]+=l[sum([len(i) for i in res]):]
+    return res
+
+
 
 def main(args):
 
@@ -15,24 +27,45 @@ def main(args):
     #     print('!-- Error --!')
     #     print('Please, type DNA/RNA/PROT.')
     #     return
+    import generateFeatures
+    
+    def wrap_gf(tup):
+        X, Y = tup
+        res=generateFeatures.gF(args, X, Y)
+        return(res)
 
 
+
+    procs=args.ncpus
     import read
-    X, Y = read.fetchXY(args.fasta, args.label)
-
-    print('\nDatasets fetching done.')
+    if procs > 1:
+        X, Y = read.fetchXY(args.fasta, args.label)
+        print('\nDatasets fetching done.')
+        tups=zip(split_list(X, proc), split_list(Y, proc))
+        print('Features extraction begins. Be patient! The machine will take some time.')
+        with ProcessPoolExecutor(max_workers=proc) as executor:
+            T = executor.map(wrap_gf, tups)
+        
+        
+    else:
+        X, Y = read.fetchXY(args.fasta, args.label)
+        print('\nDatasets fetching done.')
+        print('Features extraction begins. Be patient! The machine will take some time.')
+        T = generateFeatures.gF(args, X, Y)
+        
+    
     ############################################################################
 
-    import generateFeatures
+    
 
     # F = open('kGap.txt', 'w')
     # F.write(str(args.kGap));
     # F.close()
 
     ############################################################################
-    print('Features extraction begins. Be patient! The machine will take some time.')
+    
 
-    T = generateFeatures.gF(args, X, Y)
+    
     X_train = T[:,:-1]
     Y_train = T[:,-1]
 
@@ -102,6 +135,7 @@ if __name__ == '__main__':
     p.add_argument('-f23', '--diTri', type=int, help='Generate feature: XX_XXX', default=0, choices=[0, 1])
     p.add_argument('-f31', '--triMono', type=int, help='Generate feature: XXX_X', default=0, choices=[0, 1])
     p.add_argument('-f32', '--triDi', type=int, help='Generate feature: XXX_XX', default=0, choices=[0, 1])
+    p.add_argument('-p', '--ncpus', type= int, help = 'number of process to run', default =1)
 
     args = p.parse_args()
 
